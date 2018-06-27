@@ -10,10 +10,9 @@ License : GNU LESSER GENERAL PUBLIC LICENSE
 The revision between 2017/1/1 and 2017/7/7 is named version 0.4.
 
 I started using Git for version control in July 2017.
-The new version number is '0.5.0'.
 """
 
-__version__ = '0.4.0'
+__version__ = '0.5.1'
 
 import struct
 import collections
@@ -27,24 +26,26 @@ endian = '>' # Big Endian
 #endian = '=' # Native
 
 # Table for data type to character size
-dtype2csize = {'int32'  : 4,
-               'uint32' : 4,
-               'int16'  : 2,
-               'uint16' : 2,
-               'float32': 4,
-               'double' : 8,
-               'char'   : 1,
-               'uchar'  : 1}
+dtype2csize = {
+  'int32'  : 4,
+  'uint32' : 4,
+  'int16'  : 2,
+  'uint16' : 2,
+  'float32': 4,
+  'double' : 8,
+  'char'   : 1,
+  'uchar'  : 1}
 
 # Table for data type to character type
-dtype2ctype = {'int32'  : 'l',
-               'uint32' : 'L',
-               'int16'  : 'h',
-               'uint16' : 'H',
-               'float32': 'f',
-               'double' : 'd',
-               'char'   : 'c',
-               'uchar'  : 'B'}
+dtype2ctype = {
+  'int32'  : 'l',
+  'uint32' : 'L',
+  'int16'  : 'h',
+  'uint16' : 'H',
+  'float32': 'f',
+  'double' : 'd',
+  'char'   : 'c',
+  'uchar'  : 'B'}
 
 bytes_STFH = 3200
 bytes_SBFH = 400
@@ -73,8 +74,9 @@ SH_def["DataSampleFormat"]["descr"] = {0: {
 
 SH_def["DataSampleFormat"]["descr"][1] = {
   1: "4-byte IBM floating point", 
-  2: "4-byte Integer", 
-  3: "2-byte Integer", 
+  2: "4-byte, two's complement integer", 
+  3: "2-byte, two's complement integer", 
+  4: "4-byte, fixed-point with gain (obsolete)",
   5: "4-byte IEEE floating point",
   8: "1-byte Integer"}
 
@@ -472,7 +474,7 @@ def getSegyTraceHeader(SH, data, TH_name, TH_dict=None, itrace=0):
   i TH_name : string, Trace header name
   i TH_dict : dictionary, Trace header byte position and data type
   i itrace : integer, the trace number to read.
-  o TH_value : array, header value for each trace
+  o TH_value : array, numpy, header value for each trace
   Get the value for a trace header TH_name.
   """
 
@@ -490,14 +492,19 @@ def getSegyTraceHeader(SH, data, TH_name, TH_dict=None, itrace=0):
   traceByteSize = bytes_STH + ns * bps
 
   if itrace == 0 : # get all traces
-    TH_value = np.zeros(ntraces)
+    TH_value = np.zeros(ntraces, dtype=TH_format)
     for itrace in range(ntraces):
       pos = bytes_SFH + traceByteSize * itrace + TH_pos
       TH_value[itrace] = getValue(data, pos, TH_format, endian)
   else : # get one trace
     pos = bytes_SFH + traceByteSize * (itrace - 1) + TH_pos
     TH_value = getValue(data, pos, TH_format, endian)
-    
+
+  # If dt in STH is zero, read from SBFH.
+  if TH_name == "dt" :
+    if TH_value[0] == 0 :
+      TH_value[:] = SH["dt"]
+
   return TH_value
 
 def getSegyTraceHeaders(SH, data, TH_dict=None, itrace=0):
@@ -825,6 +832,7 @@ def getRevisionNumber(SH):
   """
   revno = SH["SegyFormatRevisionNumber"]
   if SH["SegyFormatRevisionNumber"] == 0 :
+    # Gocad
     #revno = 0
     # Some software only process binary file headers at 3200-3260.
     # They leave the revno number at 3501-3502 as zero, even when
@@ -832,6 +840,12 @@ def getRevisionNumber(SH):
     revno = 1
   elif SH["SegyFormatRevisionNumber"] == 100 :
     revno = 1
+  elif SH["SegyFormatRevisionNumber"] == 1 :
+    # Petrel
+    revno = 1
+  elif SH["SegyFormatRevisionNumber"] == 256 :
+    # SeisSpace and RokDoc
+    revno = 1
   else :
-    raise ValueError("Unknown revno number.")
+    raise ValueError("Unknown revno number:", revno)
   return revno
