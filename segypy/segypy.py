@@ -12,7 +12,7 @@ The revision between 2017/1/1 and 2017/7/7 is named version 0.4.
 I started using Git for version control in July 2017.
 """
 
-__version__ = '0.5.1'
+__version__ = '0.5.0'
 
 import struct
 import collections
